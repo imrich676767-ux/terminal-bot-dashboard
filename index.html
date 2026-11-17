@@ -1,0 +1,321 @@
+
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>CADENZZA TERMINAL</title>
+
+<style>
+
+*{box-sizing:border-box}
+
+body{margin:0;padding:20px;background:#0b1020;color:#e8edf7;font-family:Arial,sans-serif}
+
+main{max-width:850px;margin:auto}
+
+header{padding:20px 0;border-bottom:1px solid #293651}
+
+h1{color:#70e0ad;font-size:25px}
+
+.sub{color:#8996ad;font-size:13px}
+
+.panel{background:#141d31;border:1px solid #293651;border-radius:14px;padding:18px;margin-top:18px}
+
+input{width:100%;padding:13px;margin:8px 0 14px;background:#0b1325;border:1px solid #35435f;border-radius:8px;color:white}
+
+button{padding:11px 15px;border:0;border-radius:8px;background:#287b59;color:white;font-weight:bold;margin:4px;cursor:pointer}
+
+.secondary{background:#34425e}
+
+.stop{background:#9b3945}
+
+.bot{padding:15px;background:#0d1729;border:1px solid #293651;border-radius:10px;margin-top:12px}
+
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+
+.status{color:#70e0ad;font-size:13px}
+
+pre{background:#050a13;color:#8ce7b6;padding:14px;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:100px;max-height:280px;overflow:auto;font-size:12px}
+
+.hidden{display:none}
+
+small{color:#8996ad}
+
+</style>
+
+</head>
+
+<body>
+
+<main>
+
+<header>
+
+<h1>CADENZZA TERMINAL</h1>
+
+<div class="sub">PERSONAL MULTI-BOT HOSTING</div>
+
+</header>
+
+<section class="panel" id="login">
+
+<h3>Connect Backend</h3>
+
+<label><small>Backend URL</small></label>
+
+<input id="backend" type="url" placeholder="https://your-backend.example">
+
+<label><small>Private API Token</small></label>
+
+<input id="token" type="password" placeholder="Enter private API token">
+
+<button id="connectBtn">CONNECT</button>
+
+<p id="message" class="sub">Not connected</p>
+
+</section>
+
+<section class="panel hidden" id="dashboard">
+
+<div class="row">
+
+<h3>My Bots</h3>
+
+<button class="secondary" id="refreshBtn">REFRESH</button>
+
+</div>
+
+<div id="bots"></div>
+
+<h3>Console Logs</h3>
+
+<pre id="logs">Select a bot to view logs.</pre>
+
+<button class="secondary" id="disconnectBtn">DISCONNECT</button>
+
+</section>
+
+</main>
+
+<script>
+
+let base = "";
+
+let secret = "";
+
+const $ = id => document.getElementById(id);
+
+async function api(route, method = "GET") {
+
+  const response = await fetch(base + route, {
+
+    method,
+
+    headers: {
+
+      "Authorization": "Bearer " + secret,
+
+      "Content-Type": "application/json"
+
+    }
+
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+
+    throw new Error(data.error || "Request failed");
+
+  }
+
+  return data;
+
+}
+
+async function connect() {
+
+  const url = $("backend").value.trim();
+
+  const token = $("token").value;
+
+  if (!url || !token) {
+
+    $("message").textContent = "Enter URL and token.";
+
+    return;
+
+  }
+
+  try {
+
+    base = url.replace(/\/+$/, "");
+
+    secret = token;
+
+    await loadBots();
+
+    $("login").classList.add("hidden");
+
+    $("dashboard").classList.remove("hidden");
+
+  } catch (error) {
+
+    secret = "";
+
+    base = "";
+
+    $("message").textContent = "Connection failed: " + error.message;
+
+  }
+
+}
+
+async function loadBots() {
+
+  const bots = await api("/api/bots");
+
+  const container = $("bots");
+
+  container.replaceChildren();
+
+  bots.forEach(bot => {
+
+    const card = document.createElement("div");
+
+    card.className = "bot";
+
+    const row = document.createElement("div");
+
+    row.className = "row";
+
+    const info = document.createElement("div");
+
+    const name = document.createElement("strong");
+
+    name.textContent = bot.id;
+
+    const runtime = document.createElement("div");
+
+    runtime.className = "sub";
+
+    runtime.textContent = bot.runtime.toUpperCase() + " RUNTIME";
+
+    const status = document.createElement("div");
+
+    status.className = "status";
+
+    status.textContent = bot.status;
+
+    info.append(name, runtime, status);
+
+    const actions = document.createElement("div");
+
+    const start = document.createElement("button");
+
+    start.textContent = "START";
+
+    start.onclick = () => control(bot.id, "start");
+
+    const stop = document.createElement("button");
+
+    stop.textContent = "STOP";
+
+    stop.className = "stop";
+
+    stop.onclick = () => control(bot.id, "stop");
+
+    const logs = document.createElement("button");
+
+    logs.textContent = "LOGS";
+
+    logs.className = "secondary";
+
+    logs.onclick = () => showLogs(bot.id);
+
+    actions.append(start, stop, logs);
+
+    row.append(info, actions);
+
+    card.append(row);
+
+    container.append(card);
+
+  });
+
+}
+
+async function control(id, action) {
+
+  try {
+
+    await api("/api/bots/" + encodeURIComponent(id) + "/" + action, "POST");
+
+    await loadBots();
+
+  } catch (error) {
+
+    alert(error.message);
+
+  }
+
+}
+
+async function showLogs(id) {
+
+  try {
+
+    const data = await api(
+
+      "/api/bots/" + encodeURIComponent(id) + "/logs"
+
+    );
+
+    $("logs").textContent =
+
+      data.map(item => item.time + " " + item.message).join("\n")
+
+      || "No logs yet.";
+
+  } catch (error) {
+
+    $("logs").textContent = error.message;
+
+  }
+
+}
+
+function disconnect() {
+
+  secret = "";
+
+  base = "";
+
+  $("token").value = "";
+
+  $("dashboard").classList.add("hidden");
+
+  $("login").classList.remove("hidden");
+
+  $("message").textContent = "Disconnected";
+
+}
+
+$("connectBtn").addEventListener("click", connect);
+
+$("refreshBtn").addEventListener("click", loadBots);
+
+$("disconnectBtn").addEventListener("click", disconnect);
+
+</script>
+
+</body>
+
+</html>
